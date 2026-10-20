@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Murdoku: генератор для друку</title>
+<link href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#efece7;--fg:#1d1a17;--mut:#6b655e;--panel:#fbfaf8;--line:#d4cec6;--acc:#8b1e2d;--accfg:#fff;
+ box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a1816;--fg:#ece8e2;--mut:#a39c92;--panel:#26231f;--line:#3b3631;--acc:#e0707c;--accfg:#1a1816}}
+:root[data-theme="dark"]{--bg:#1a1816;--fg:#ece8e2;--mut:#a39c92;--panel:#26231f;--line:#3b3631;--acc:#e0707c;--accfg:#1a1816}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 "PT Serif",Georgia,serif;padding:16px}
+.ctl{max-width:794px;margin:0 auto 16px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:end}
+.ctl label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);gap:3px}
+select,button{font:inherit;font-size:15px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:7px 10px;min-height:38px}
+button{cursor:pointer}
+button.main{background:var(--acc);color:var(--accfg);border-color:var(--acc);font-weight:700}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#st{font-size:13px;color:var(--mut);flex-basis:100%;margin:0;min-height:1.4em}
+.sheet{max-width:794px;margin:0 auto;background:#fff;color:#1d1a17;padding:30px 34px;border:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.sheet h1{font-size:34px;line-height:1.1;margin:0 0 4px;font-style:italic}
+.no{margin:0;font-size:13px;color:#8b1e2d;font-weight:700}
+.rules{font-size:13px;margin:6px 0 14px;max-width:66ch}
+.board{container-type:inline-size;display:grid;grid-template-columns:repeat(var(--n),1fr);width:min(100%,520px);border:3px solid #1d1a17;margin:0 auto 16px}
+.cell{aspect-ratio:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;text-align:center}
+.rn{position:absolute;left:0;top:0;background:#fff;font-style:normal;font-weight:700;font-size:calc(9.5cqw/var(--n));padding:.1em .35em;border-bottom-right-radius:3px}
+.it{font-size:calc(34cqw/var(--n))}
+.it small{display:block;font-size:calc(11cqw/var(--n))}
+.vic{font-size:calc(40cqw/var(--n));color:#8b1e2d}
+.su{font-style:normal;font-weight:700;font-size:calc(14cqw/var(--n));background:#fff;border:1.5px solid #1d1a17;border-radius:3px;padding:.1em .3em;margin-top:2px}
+.su.k{background:#8b1e2d;color:#fff;border-color:#8b1e2d}
+h2{font-size:15px;margin:0 0 6px;font-weight:700}
+.names{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-wrap:wrap;gap:6px 18px;font-size:15px}
+.bx{display:inline-block;width:11px;height:11px;border:1.5px solid #1d1a17;margin-right:6px;vertical-align:-1px}
+.clues{columns:2;column-gap:26px;margin:0 0 16px;padding-left:22px;font-size:14px}
+.clues li{break-inside:avoid;margin-bottom:5px}
+.ans{font-size:16px;margin:8px 0 0}
+.ans u{display:inline-block;width:38%;border-bottom:1.5px solid #1d1a17;text-decoration:none;margin:0 8px 0 4px}
+.sol{display:none;margin-top:30px;border-top:2px dashed #999;padding-top:20px}
+body.showsol .sol{display:block}
+@page{size:A4;margin:12mm}
+@media print{
+ :root{padding:0}body{background:#fff;padding:0}.ctl{display:none}
+ .sheet{border:0;box-shadow:none;padding:0;max-width:none}
+ .board{width:150mm}
+ .sol{break-before:page;margin:0;border:0;padding:0}
+ *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+<div class="ctl">
+ <label>Розмір<select id="size"><option value="5">5×5</option><option value="6" selected>6×6</option><option value="7">7×7</option></select></label>
+ <label>Складність<select id="diff"><option value="0">Легка</option><option value="1" selected>Середня</option><option value="2">Складна</option></select></label>
+ <button class="main" id="gen">Нова головоломка</button>
+ <button id="sol">Показати розв’язок</button>
+ <button id="prn">Друк</button>
+ <p id="st" role="status"></p>
+</div>
+<main class="sheet" id="sheet"></main>
+
+<script>
+const $=s=>document.querySelector(s);
+const rnd=n=>Math.floor(Math.random()*n);
+const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]]}return a};
+const NAMES=['Анна','Борис','Віра','Грицько','Дарина','Едуард','Жанна','Захар','Ірина','Кирило','Лада','Марко'];
+const ROOMS=['Кухня','Вітальня','Спальня','Кабінет','Ванна','Бібліотека','Їдальня','Веранда'];
+const TINT=['#fde8d7','#dff0e3','#dde8f7','#f7e3ef','#f6f0c9','#e6e0f4','#d9f0f0','#eee2d6'];
+const FURN=[['🛋','диван'],['🛏','ліжко'],['🪑','крісло'],['🌿','рослина'],['📚','шафа'],['🔥','камін'],['🍽','стіл'],['🛁','ванна'],['🎹','піаніно']];
+const WEAP=[['🔪','ніж'],['🔫','пістолет'],['🧪','отрута'],['🗡','кинджал'],['🔨','молоток'],['🕯','свічник']];
+let Q=null;
+
+function makePuzzle(N){
+ const K=Math.min(8,N-1),rm=Array.from({length:N},()=>Array(N).fill(-1));
+ shuf([...Array(N*N).keys()]).slice(0,K).forEach((v,i)=>rm[v/N|0][v%N]=i);
+ for(let left=N*N-K;left>0;left--){
+  const o=[];
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(rm[r][c]<0)for(const[d,e]of[[1,0],[-1,0],[0,1],[0,-1]]){const y=r+d,x=c+e;if(y>=0&&x>=0&&y<N&&x<N&&rm[y][x]>=0)o.push([r,c,rm[y][x]])}
+  const[r,c,k]=o[rnd(o.length)];rm[r][c]=k;
+ }
+ const cols=shuf([...Array(N).keys()]),rowOf=shuf([...Array(N).keys()]);
+ const pos=rowOf.map(r=>[r,cols[r]]);
+ const nm=shuf(NAMES).slice(0,N).sort((a,b)=>a.localeCompare(b,'uk'));
+ const cellsOf=k=>{const L=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(rm[r][c]===k)L.push([r,c]);return L};
+ const isSus=(r,c)=>pos.some(p=>p[0]===r&&p[1]===c);
+ const cand=[];
+ for(let k=0;k<K;k++){const cs=cellsOf(k);if(cs.length>=2&&pos.filter(p=>rm[p[0]][p[1]]===k).length===1){const f=cs.filter(([r,c])=>!isSus(r,c));if(f.length)cand.push([k,f])}}
+ if(!cand.length)return null;
+ const[vr,vf]=cand[rnd(cand.length)],vic=vf[rnd(vf.length)];
+ const used=new Set([vic[0]*N+vic[1]]),items=[];
+ const put=(d,w,cs)=>{const f=cs.filter(([r,c])=>!used.has(r*N+c));if(!f.length)return;const[r,c]=f[rnd(f.length)];used.add(r*N+c);items.push({r,c,e:d[0],n:d[1],w})};
+ const wp=shuf(WEAP);put(wp[0],1,cellsOf(vr));
+ shuf([...Array(K).keys()].filter(k=>k!==vr)).slice(0,Math.max(1,K>>1)).forEach((k,i)=>put(wp[i+1],1,cellsOf(k)));
+ const all=[];for(let r=0;r<N;r++)for(let c=0;c<N;c++)all.push([r,c]);
+ shuf(FURN).slice(0,Math.min(N,9)).forEach(d=>put(d,0,all));
+ return{N,K,rm,nm,pos,vic,vr,items,rn:shuf(ROOMS).slice(0,K),id:100+rnd(900)};
+}
+
+const rmOf=p=>Q.rm[p[0]][p[1]];
+function holds(c,P){
+ const A=P[c.a],B=P[c.b];
+ switch(c.t){
+  case'in':return rmOf(A)===c.x;
+  case'nin':return rmOf(A)!==c.x;
+  case'on':{const i=Q.items[c.x];return A[0]===i.r&&A[1]===i.c}
+  case'row':return A[0]===Q.items[c.x].r;
+  case'col':return A[1]===Q.items[c.x].c;
+  case'left':return A[1]<B[1];
+  case'above':return A[0]<B[0];
+  case'same':return rmOf(A)===rmOf(B);
+  case'diag':return Math.abs(A[0]-B[0])===1&&Math.abs(A[1]-B[1])===1;
+  case'alone':return rmOf(A)===c.x&&P.filter(p=>rmOf(p)===c.x).length===1;
+  case'cnt':return P.filter(p=>rmOf(p)===c.x).length===c.k;
+ }
+}
+const unary=(c,cell)=>c.t==='alone'?rmOf(cell)===c.x:holds(c,{[c.a]:cell});
+
+function solve(clues,cap=250000){
+ const N=Q.N,all=[];
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!(r===Q.vic[0]&&c===Q.vic[1]))all.push([r,c]);
+ const dom=Array.from({length:N},()=>all),bin=Array.from({length:N},()=>[]);
+ const mx=Array(Q.K).fill(N),ex={};mx[Q.vr]=1;ex[Q.vr]=1;
+ for(const c of clues){
+  if(['left','above','same','diag'].includes(c.t)){bin[c.a].push(c);bin[c.b].push(c)}
+  else{
+   if(c.t==='cnt'||c.t==='alone'){const k=c.t==='alone'?1:c.k;ex[c.x]=k;mx[c.x]=Math.min(mx[c.x],k)}
+   if(c.t!=='cnt')dom[c.a]=dom[c.a].filter(cl=>unary(c,cl));
+  }
+ }
+ const ord=[...Array(N).keys()].sort((a,b)=>dom[a].length-dom[b].length);
+ const P=Array(N).fill(null),ru=Array(N).fill(0),cu=Array(N).fill(0),cnt=Array(Q.K).fill(0);
+ let n=0,found=0,ab=false;
+ (function go(i){
+  if(found>1||ab)return;
+  if(i===N){for(const x in ex)if(cnt[x]!==ex[x])return;found++;return}
+  if(++n>cap){ab=true;return}
+  const s=ord[i];
+  for(const cl of dom[s]){
+   const[r,c]=cl,x=Q.rm[r][c];
+   if(ru[r]||cu[c]||cnt[x]>=mx[x])continue;
+   P[s]=cl;
+   if(bin[s].every(k=>{const o=k.a===s?k.b:k.a;return !P[o]||holds(k,P)})){ru[r]=cu[c]=1;cnt[x]++;go(i+1);ru[r]=cu[c]=0;cnt[x]--}
+   P[s]=null;
+   if(found>1||ab)return;
+  }
+ })(0);
+ return{found,ab};
+}
+
+function trueClues(q){
+ const N=q.N,L=[];
+ for(let a=0;a<N;a++){
+  for(let x=0;x<q.K;x++){L.push({t:'in',a,x},{t:'nin',a,x},{t:'alone',a,x})}
+  q.items.forEach((_,x)=>L.push({t:'on',a,x},{t:'row',a,x},{t:'col',a,x}));
+  for(let b=0;b<N;b++)if(a!==b){L.push({t:'left',a,b},{t:'above',a,b});if(a<b)L.push({t:'same',a,b},{t:'diag',a,b})}
+ }
+ for(let x=0;x<q.K;x++)L.push({t:'cnt',x,k:q.pos.filter(p=>q.rm[p[0]][p[1]]===x).length});
+ return L.filter(c=>holds(c,q.pos));
+}
+
+const WT=[{in:6,on:5,row:4,col:4,same:3,nin:2,left:2,above:2,diag:1,cnt:2,alone:3},
+          {in:3,on:3,row:3,col:3,same:3,nin:3,left:3,above:3,diag:2,cnt:2,alone:2},
+          {in:1,on:1,row:2,col:2,same:3,nin:3,left:4,above:4,diag:3,cnt:2,alone:2}];
+
+function build(N,d){
+ for(let t=0;t<80;t++){
+  const q=makePuzzle(N);if(!q)continue;Q=q;
+  const pool=trueClues(q),ct={};
+  pool.forEach(c=>ct[c.t]=(ct[c.t]||0)+1);
+  pool.forEach(c=>c.key=-Math.log(Math.random()+1e-9)/(WT[d][c.t]/Math.sqrt(ct[c.t])));
+  pool.sort((x,y)=>x.key-y.key);
+  let cl=[],ok=false;
+  for(const c of pool){cl.push(c);if(cl.length>=3){const r=solve(cl);if(r.found===1&&!r.ab){ok=true;break}}}
+  if(!ok)continue;
+  if(d>0)for(const c of shuf(cl).slice(0,d===1?Math.ceil(cl.length/2):99)){
+   const rest=cl.filter(x=>x!==c);
+   if(rest.length){const r=solve(rest);if(r.found===1&&!r.ab)cl=rest}
+  }
+  q.clues=cl.sort((x,y)=>(x.a??99)-(y.a??99));
+  return q;
+ }
+ return null;
+}
+
+function clueText(q,c){
+ const A=q.nm[c.a],B=q.nm[c.b],R=x=>'«'+q.rn[x]+'»',I=x=>q.items[x].e+' '+q.items[x].n;
+ switch(c.t){
+  case'in':return`${A} — у кімнаті ${R(c.x)}`;
+  case'nin':return`${A} — не в кімнаті ${R(c.x)}`;
+  case'on':return`${A} стоїть на предметі ${I(c.x)}`;
+  case'row':return`${A} — в одному рядку з предметом ${I(c.x)}`;
+  case'col':return`${A} — в одному стовпці з предметом ${I(c.x)}`;
+  case'left':return`${A} стоїть лівіше, ніж ${B}`;
+  case'above':return`${A} стоїть вище, ніж ${B}`;
+  case'same':return`${A} і ${B} — в одній кімнаті`;
+  case'diag':return`${A} і ${B} стоять по діагоналі впритул`;
+  case'alone':return`У кімнаті ${R(c.x)} — лише ${A}`;
+  case'cnt':return`У кімнаті ${R(c.x)} підозрюваних: ${c.k}`;
+ }
+}
+
+function board(q,sol){
+ const N=q.N,first={};
+ let h=`<div class="board" style="--n:${N}">`;
+ for(let r=0;r<N;r++)for(let c=0;c<N;c++){
+  const k=q.rm[r][c];if(!(k in first))first[k]=1;
+  const d=(dy,dx)=>{const y=r+dy,x=c+dx;return y<0||x<0||y>=N||x>=N||q.rm[y][x]!==k?'2.5px solid #1d1a17':'1px solid #a8a29a'};
+  const it=q.items.find(i=>i.r===r&&i.c===c),s=q.pos.findIndex(p=>p[0]===r&&p[1]===c);
+  let inner='';
+  if(first[k]===1){first[k]=2;inner+=`<i class="rn">${q.rn[k]}</i>`}
+  if(r===q.vic[0]&&c===q.vic[1])inner+='<span class="vic">☠</span>';
+  if(it)inner+=`<span class="it">${it.e}<small>${it.n}</small></span>`;
+  if(sol&&s>=0)inner+=`<em class="su${q.rm[r][c]===q.vr?' k':''}">${q.nm[s]}</em>`;
+  h+=`<div class="cell" style="background:${TINT[k]};border-top:${d(-1,0)};border-bottom:${d(1,0)};border-left:${d(0,-1)};border-right:${d(0,1)}">${inner}</div>`;
+ }
+ return h+'</div>';
+}
+
+function render(){
+ const q=Q,ki=q.pos.findIndex(p=>q.rm[p[0]][p[1]]===q.vr),w=q.items.find(i=>i.w&&q.rm[i.r][i.c]===q.vr);
+ $('#sheet').innerHTML=`
+ <p class="no">Справа № ${q.id}</p><h1>Хто вбивця?</h1>
+ <p class="rules">У кожному рядку й у кожному стовпці стоїть рівно один підозрюваний. Підозрювані можуть стояти на предметах, але не на місці жертви (☠). Вбивця був у кімнаті сам на сам із жертвою, і зброя лежала в тій самій кімнаті. Розстав підозрюваних за свідченнями, знайди вбивцю й зброю.</p>
+ ${board(q,false)}
+ <h2>Підозрювані</h2>
+ <ul class="names">${q.nm.map(n=>`<li><span class="bx"></span>${n}</li>`).join('')}</ul>
+ <h2>Свідчення</h2>
+ <ol class="clues">${q.clues.map(c=>`<li>${clueText(q,c)}</li>`).join('')}</ol>
+ <p class="ans">Вбивця:<u></u>Зброя:<u></u></p>
+ <section class="sol"><h2>Розв’язок. Справа № ${q.id}</h2>${board(q,true)}
+ <p>Вбивця: <b>${q.nm[ki]}</b>. Зброя: <b>${w.e} ${w.n}</b>. Місце злочину: кімната «${q.rn[q.vr]}».</p></section>`;
+}
+
+function gen(){
+ $('#st').textContent='Генерую головоломку…';
+ $('#gen').disabled=true;
+ setTimeout(()=>{
+  const q=build(+$('#size').value,+$('#diff').value);
+  $('#gen').disabled=false;
+  if(!q){$('#st').textContent='Не вдалося згенерувати. Спробуй ще раз.';return}
+  Q=q;render();
+  $('#st').textContent=`Єдиний розв’язок перевірено. Свідчень: ${q.clues.length}.`;
+ },30);
+}
+$('#gen').onclick=gen;
+$('#size').onchange=gen;
+$('#diff').onchange=gen;
+$('#sol').onclick=()=>{const on=document.body.classList.toggle('showsol');$('#sol').textContent=on?'Сховати розв’язок':'Показати розв’язок'};
+$('#prn').onclick=()=>{try{window.print()}catch(e){$('#st').textContent='Друк: натисни Ctrl+P (на Mac — ⌘P).'}};
+gen();
+</script>
+</body>
+</html>
